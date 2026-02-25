@@ -1,0 +1,15 @@
+{
+  "name": "downtown-rooftops",
+  "days": 120,
+  "seed": 77,
+  "initialPollinators": 140,
+  "initialPests": 90,
+  "initialCropHealth": 0.65,
+  "initialSoilMoisture": 0.58,
+  "weatherVolatility": 0.4,
+  "policy": {
+    "wateringBudget": 0.55,
+    "pesticideCap": 0.35,
+    "corridorInvestment": 0.65
+  }
+}
