@@ -4,3 +4,5 @@ export * from './engine.js';
 export * from './persistence.js';
 export * from './reporting.js';
 export * from './automation.js';
+export * from './stats.js';
+export * from './api.js';

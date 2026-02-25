@@ -1,8 +1,8 @@
 # Chaos Garden Lab
 
-A novel simulation lab for testing **urban agro-ecosystem policies** under weather volatility.
+A simulation lab for testing **urban agro-ecosystem policies** under weather volatility.
 
-Chaos Garden Lab models the interaction of pollinators, pests, moisture, and crop health, then lets you run automated policy sweeps and generate historical reports from SQLite-backed runs.
+Chaos Garden Lab models pollinators, pests, moisture, and crop health, supports policy sweeps, Monte Carlo confidence intervals, optional spatial neighborhoods, SQLite-backed history, and both markdown + HTML reporting.
 
 ## Quickstart
 
@@ -11,60 +11,135 @@ npm install
 npm run build
 
 # Single run
-node dist/cli.js --db gardenlab.db run --scenario scenario.example.json
+node dist/src/cli.js --db gardenlab.db run --scenario scenario.example.json
 
-# Generate report for run 1
-node dist/cli.js --db gardenlab.db report --run-id 1 --out run-1-report.md
+# Markdown report
+node dist/src/cli.js --db gardenlab.db report --run-id 1 --out run-1-report.md --format md
+
+# Rich HTML report
+node dist/src/cli.js --db gardenlab.db report --run-id 1 --out run-1-report.html --format html
 
 # Sweep and leaderboard
-node dist/cli.js --db gardenlab.db sweep --scenario scenario.example.json
-node dist/cli.js --db gardenlab.db leaderboard 10
+node dist/src/cli.js --db gardenlab.db sweep --scenario scenario.example.json
+node dist/src/cli.js --db gardenlab.db leaderboard 10
 ```
 
-## Real examples
+## New capabilities
 
-Run a scenario:
+### 1) API mode
+
+Start API server:
+
 ```bash
-node dist/cli.js --db gardenlab.db run --scenario scenario.example.json
-# Run completed: run_id=1 avg_resilience=0.8012
+node dist/src/cli.js --db gardenlab.db api --host 127.0.0.1 --port 8787
 ```
 
-Generate report:
+Endpoints:
+- `GET /health`
+- `POST /simulate` (body: `{ "scenario": { ... } }`)
+- `POST /sweep` (body can include custom policy grids)
+- `POST /monte-carlo` (body: scenario + `runs`, `seedStart`, `confidenceLevel`)
+
+Example:
+
 ```bash
-node dist/cli.js --db gardenlab.db report --run-id 1 --out report.md
-cat report.md
+curl -s http://127.0.0.1:8787/monte-carlo \
+  -H 'content-type: application/json' \
+  -d '{
+    "scenario": { "name": "api-mc", "days": 60, "seed": 42, "policy": { "wateringBudget": 0.45, "pesticideCap": 0.5, "corridorInvestment": 0.4 } },
+    "runs": 25,
+    "confidenceLevel": 0.95
+  }' | jq
 ```
+
+### 2) Monte Carlo confidence intervals
+
+Run Monte Carlo from CLI:
+
+```bash
+node dist/src/cli.js --db gardenlab.db monte-carlo --scenario scenario.example.json --runs 30 --confidence 0.95
+```
+
+Output includes:
+- sample count
+- mean resilience
+- sample standard deviation
+- margin of error
+- confidence interval bounds (`ciLow`, `ciHigh`)
+
+### 3) Spatial neighborhoods + migration
+
+Scenario now supports optional `spatial` config:
+
+```json
+{
+  "name": "spatial-demo",
+  "days": 90,
+  "seed": 42,
+  "policy": { "wateringBudget": 0.5, "pesticideCap": 0.4, "corridorInvestment": 0.5 },
+  "spatial": {
+    "migrationRate": 0.1,
+    "neighborhoods": [
+      { "name": "north", "weatherModifier": -0.05, "moistureRetention": 1.1, "initialPollinators": 140 },
+      { "name": "south", "weatherModifier": 0.06, "moistureRetention": 0.9, "initialPollinators": 90 }
+    ]
+  }
+}
+```
+
+Behavior:
+- per-neighborhood local dynamics each day
+- migration exchange of pollinators/pests via `migrationRate`
+- aggregate timeline remains available for backwards compatibility
+
+### 4) Rich HTML visualization
+
+`report --format html` generates a richer single-file report with:
+- inline SVG resilience trend
+- inline SVG pollinators vs pests trend
+- scenario metric cards
+- neighborhood snapshot table (if spatial data exists)
 
 ## Architecture
 
 1. **Core Engine (`src/engine.ts`)**
    - deterministic seeded stochastic dynamics
-   - daily update loop + resilience scoring
+   - single-zone and neighborhood-aware simulation modes
+   - migration effects when spatial mode is enabled
 
 2. **Config/Validation (`src/config.ts`)**
-   - scenario loading and constraints
+   - scenario loading + guardrails
+   - spatial neighborhoods schema validation
 
-3. **Persistence (`src/persistence.ts`)**
-   - SQLite schema and run/day storage
-   - run retrieval + top-run ranking
+3. **Analytics (`src/stats.ts`)**
+   - Monte Carlo orchestration across seeds
+   - sample standard deviation + Z-score confidence intervals
 
-4. **Reporting/Visualization (`src/reporting.ts`)**
-   - ASCII sparkline-style trend rendering
-   - markdown run reports and sweep summaries
+4. **Persistence (`src/persistence.ts`)**
+   - SQLite schema + migrations
+   - run/day storage, including optional neighborhood snapshots
 
-5. **Automation (`src/automation.ts`)**
-   - policy grid sweep execution and ranking
+5. **Reporting (`src/reporting.ts`)**
+   - ASCII trend output for markdown reports
+   - HTML report generation with SVG charts
 
-6. **CLI (`src/cli.ts`)**
-   - end-to-end commands: run, sweep, report, leaderboard
+6. **Automation (`src/automation.ts`)**
+   - policy sweep execution + ranking
+
+7. **CLI/API (`src/cli.ts`, `src/api.ts`)**
+   - local command workflows
+   - HTTP API mode for remote orchestration
 
 ## Testing
 
 - Unit tests:
-  - engine determinism and policy effect
-  - reporting trend output
-- Integration/E2E:
-  - full flow run -> report -> leaderboard
+  - engine determinism + policy effects
+  - spatial neighborhood outputs
+  - reporting markdown + HTML render
+  - Monte Carlo CI math
+- Integration tests:
+  - full CLI workflow including HTML + Monte Carlo
+  - API mode endpoints (`/health`, `/simulate`, `/monte-carlo`)
 
 ```bash
 npm run lint
@@ -75,13 +150,10 @@ npm run build
 ## Limitations
 
 - Ecological model is synthetic and not field-calibrated
-- Single-zone model (no spatial neighborhoods)
-- CLI argument parser is intentionally lightweight
-- Visualization is text-first (no interactive charts yet)
+- Confidence intervals currently use normal-approximation Z-scores (fixed supported levels)
+- API mode is intentionally lightweight (no auth/rate-limits built-in)
 
-## Next steps
+## Repository
 
-- Add API mode for remote simulation orchestration
-- Add Monte Carlo confidence intervals over multiple seeds
-- Add spatial neighborhoods and migration effects
-- Add HTML report output with richer charts
+- URL: https://github.com/fdubebot/chaos-garden-lab
+- Default branch: `main`

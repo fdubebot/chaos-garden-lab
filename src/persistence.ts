@@ -24,9 +24,17 @@ export function initDb(dbPath: string): Database.Database {
       pests REAL NOT NULL,
       crop_health REAL NOT NULL,
       resilience_score REAL NOT NULL,
+      neighborhoods_json TEXT,
       PRIMARY KEY (run_id, day)
     );
   `);
+
+  try {
+    db.exec('ALTER TABLE daily_states ADD COLUMN neighborhoods_json TEXT');
+  } catch {
+    // already migrated
+  }
+
   return db;
 }
 
@@ -46,8 +54,8 @@ export function saveResult(db: Database.Database, result: SimulationResult, meta
 
   const runId = Number(runInfo.lastInsertRowid);
   const dayStmt = db.prepare(`
-    INSERT INTO daily_states (run_id, day, weather_stress, soil_moisture, pollinators, pests, crop_health, resilience_score)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO daily_states (run_id, day, weather_stress, soil_moisture, pollinators, pests, crop_health, resilience_score, neighborhoods_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const insertMany = db.transaction(() => {
@@ -60,7 +68,8 @@ export function saveResult(db: Database.Database, result: SimulationResult, meta
         day.pollinators,
         day.pests,
         day.cropHealth,
-        day.resilienceScore
+        day.resilienceScore,
+        day.neighborhoods ? JSON.stringify(day.neighborhoods) : null
       );
     }
   });

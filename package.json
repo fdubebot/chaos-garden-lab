@@ -1,11 +1,11 @@
 {
   "name": "chaos-garden-lab",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Urban ecosystem policy simulation lab",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "bin": {
-    "gardenlab": "dist/cli.js"
+    "gardenlab": "dist/src/cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

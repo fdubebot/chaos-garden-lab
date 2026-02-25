@@ -11,6 +11,7 @@ describe('e2e workflow', () => {
       const db = join(dir, 'lab.db');
       const scenario = join(dir, 'scenario.json');
       const report = join(dir, 'report.md');
+      const reportHtml = join(dir, 'report.html');
       writeFileSync(
         scenario,
         JSON.stringify({
@@ -24,6 +25,9 @@ describe('e2e workflow', () => {
       expect(cli(['--db', db, 'run', '--scenario', scenario])).toBe(0);
       expect(cli(['--db', db, 'report', '--run-id', '1', '--out', report])).toBe(0);
       expect(readFileSync(report, 'utf-8')).toContain('Chaos Garden Report');
+      expect(cli(['--db', db, 'report', '--run-id', '1', '--out', reportHtml, '--format', 'html'])).toBe(0);
+      expect(readFileSync(reportHtml, 'utf-8')).toContain('<svg');
+      expect(cli(['--db', db, 'monte-carlo', '--scenario', scenario, '--runs', '3'])).toBe(0);
       expect(cli(['--db', db, 'leaderboard', '5'])).toBe(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
