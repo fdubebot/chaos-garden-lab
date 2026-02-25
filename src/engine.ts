@@ -72,11 +72,9 @@ function applyMigration(states: MutableNeighborhoodState[], migrationRate: numbe
   }
 }
 
-export function runSimulation(config: ScenarioConfig): SimulationResult {
-  const rng = new Lcg(config.seed);
-
-  const neighborhoods: MutableNeighborhoodState[] = config.spatial
-    ? config.spatial.neighborhoods.map((n, idx) => ({
+function initNeighborhoodState(config: ScenarioConfig): MutableNeighborhoodState[] {
+  return config.spatial
+    ? config.spatial.neighborhoods.map((n) => ({
         name: n.name,
         weatherModifier: n.weatherModifier ?? 0,
         moistureRetention: n.moistureRetention ?? 1,
@@ -96,10 +94,14 @@ export function runSimulation(config: ScenarioConfig): SimulationResult {
           soilMoisture: config.initialSoilMoisture
         }
       ];
+}
 
-  const timeline: DayState[] = [];
+export function* streamSimulationDays(config: ScenarioConfig, maxDays = config.days): Generator<DayState> {
+  const rng = new Lcg(config.seed);
+  const neighborhoods = initNeighborhoodState(config);
+  const totalDays = Math.max(1, Math.min(maxDays, config.days));
 
-  for (let day = 1; day <= config.days; day += 1) {
+  for (let day = 1; day <= totalDays; day += 1) {
     const dailyNeighborhoods: NeighborhoodDayState[] = neighborhoods.map((n) => ({
       name: n.name,
       ...evolveNeighborhood(n, config, rng)
@@ -124,7 +126,7 @@ export function runSimulation(config: ScenarioConfig): SimulationResult {
 
     const count = dailyNeighborhoods.length;
 
-    timeline.push({
+    yield {
       day,
       weatherStress: Number((avg.weatherStress / count).toFixed(4)),
       soilMoisture: Number((avg.soilMoisture / count).toFixed(4)),
@@ -133,14 +135,16 @@ export function runSimulation(config: ScenarioConfig): SimulationResult {
       cropHealth: Number((avg.cropHealth / count).toFixed(4)),
       resilienceScore: Number((avg.resilienceScore / count).toFixed(4)),
       neighborhoods: config.spatial ? dailyNeighborhoods : undefined
-    });
+    };
   }
+}
 
+export function buildSimulationResult(config: ScenarioConfig, timeline: DayState[]): SimulationResult {
   const averageResilience = timeline.reduce((s, d) => s + d.resilienceScore, 0) / timeline.length;
   return {
     scenarioName: config.name,
     seed: config.seed,
-    days: config.days,
+    days: timeline.length,
     timeline,
     averageResilience: Number(averageResilience.toFixed(6)),
     spatial: config.spatial
@@ -150,4 +154,9 @@ export function runSimulation(config: ScenarioConfig): SimulationResult {
         }
       : undefined
   };
+}
+
+export function runSimulation(config: ScenarioConfig): SimulationResult {
+  const timeline = [...streamSimulationDays(config, config.days)];
+  return buildSimulationResult(config, timeline);
 }

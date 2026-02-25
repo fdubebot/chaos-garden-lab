@@ -45,6 +45,15 @@ This project combines a stochastic ecosystem simulator with experiment automatio
 
 ## Next Steps Implementation Plan (2026-02 release)
 
+## Realtime Visualization Plan (2026-02-25)
+1. Add a shared day-by-day simulation stream in `engine.ts` so both batch mode and live mode use the same deterministic evolution path for fixed seeds.
+2. Implement `src/live.ts` terminal live dashboard renderer and async runner with configurable interval + run length (day cap), including neighborhood snapshots when spatial mode exists.
+3. Wire CLI subcommand `live` with flags (`--scenario`, `--interval-ms`, `--days`, `--no-clear`) and persist completed live runs to SQLite without breaking existing commands.
+4. Add tests:
+   - unit test for live pipeline determinism/consistency vs regular simulation
+   - integration/e2e test for CLI `live` flow.
+5. Update README docs (usage, architecture notes, limitations/examples), then run lint/test/build, commit, and push to `main`.
+
 ### Phase 1 — Foundations and compatibility
 - Confirm README next-step scope and preserve backwards-compatible CLI behavior.
 - Extend `ScenarioConfig` for optional **spatial neighborhoods** while keeping single-zone defaults.

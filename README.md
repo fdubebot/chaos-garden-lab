@@ -13,6 +13,12 @@ npm run build
 # Single run
 node dist/src/cli.js --db gardenlab.db run --scenario scenario.example.json
 
+# Live terminal visualization (fast ticks)
+node dist/src/cli.js --db gardenlab.db live --scenario scenario.example.json --interval-ms 200
+
+# Live run for 30 days without screen clearing (good for CI/log capture)
+node dist/src/cli.js --db gardenlab.db live --scenario scenario.example.json --days 30 --interval-ms 0 --no-clear
+
 # Markdown report
 node dist/src/cli.js --db gardenlab.db report --run-id 1 --out run-1-report.md --format md
 
@@ -52,7 +58,27 @@ curl -s http://127.0.0.1:8787/monte-carlo \
   }' | jq
 ```
 
-### 2) Monte Carlo confidence intervals
+### 2) Real-time live visualization mode
+
+Launch live mode from CLI:
+
+```bash
+node dist/src/cli.js --db gardenlab.db live --scenario scenario.example.json --interval-ms 250
+```
+
+Options:
+- `--interval-ms <n>`: render tick interval in milliseconds (use `0` for fastest non-delayed run)
+- `--days <n>`: cap run length (e.g. preview first 30 days)
+- `--no-clear`: do not clear terminal between frames (useful for logs/CI)
+
+Live dashboard includes:
+- resilience score
+- pests
+- pollinators
+- crop health / soil moisture / weather stress
+- per-neighborhood snapshots when `spatial.neighborhoods` is enabled
+
+### 3) Monte Carlo confidence intervals
 
 Run Monte Carlo from CLI:
 
@@ -67,7 +93,7 @@ Output includes:
 - margin of error
 - confidence interval bounds (`ciLow`, `ciHigh`)
 
-### 3) Spatial neighborhoods + migration
+### 4) Spatial neighborhoods + migration
 
 Scenario now supports optional `spatial` config:
 
@@ -92,7 +118,7 @@ Behavior:
 - migration exchange of pollinators/pests via `migrationRate`
 - aggregate timeline remains available for backwards compatibility
 
-### 4) Rich HTML visualization
+### 5) Rich HTML visualization
 
 `report --format html` generates a richer single-file report with:
 - inline SVG resilience trend
@@ -105,6 +131,7 @@ Behavior:
 1. **Core Engine (`src/engine.ts`)**
    - deterministic seeded stochastic dynamics
    - single-zone and neighborhood-aware simulation modes
+   - shared day-stream pipeline (`streamSimulationDays`) used by both batch and live mode
    - migration effects when spatial mode is enabled
 
 2. **Config/Validation (`src/config.ts`)**
@@ -126,8 +153,12 @@ Behavior:
 6. **Automation (`src/automation.ts`)**
    - policy sweep execution + ranking
 
-7. **CLI/API (`src/cli.ts`, `src/api.ts`)**
-   - local command workflows
+7. **Live Visualization (`src/live.ts`)**
+   - async live-run orchestrator with configurable tick interval
+   - terminal dashboard frame rendering with neighborhood snapshots
+
+8. **CLI/API (`src/cli.ts`, `src/api.ts`)**
+   - local command workflows (`run`, `live`, `sweep`, `monte-carlo`, `report`, `leaderboard`)
    - HTTP API mode for remote orchestration
 
 ## Testing
@@ -152,6 +183,7 @@ npm run build
 - Ecological model is synthetic and not field-calibrated
 - Confidence intervals currently use normal-approximation Z-scores (fixed supported levels)
 - API mode is intentionally lightweight (no auth/rate-limits built-in)
+- Live visualization currently targets terminal output (no browser UI/SSE stream yet)
 
 ## Repository
 

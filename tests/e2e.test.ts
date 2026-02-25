@@ -23,6 +23,7 @@ describe('e2e workflow', () => {
       );
 
       expect(cli(['--db', db, 'run', '--scenario', scenario])).toBe(0);
+      expect(cli(['--db', db, 'live', '--scenario', scenario, '--days', '5', '--interval-ms', '0', '--no-clear'])).toBe(0);
       expect(cli(['--db', db, 'report', '--run-id', '1', '--out', report])).toBe(0);
       expect(readFileSync(report, 'utf-8')).toContain('Chaos Garden Report');
       expect(cli(['--db', db, 'report', '--run-id', '1', '--out', reportHtml, '--format', 'html'])).toBe(0);

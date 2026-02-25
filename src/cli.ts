@@ -1,17 +1,23 @@
 #!/usr/bin/env node
 import { writeFileSync } from 'node:fs';
 import { loadScenario } from './config.js';
-import { runSimulation } from './engine.js';
+import { buildSimulationResult, runSimulation, streamSimulationDays } from './engine.js';
 import { runPolicySweep } from './automation.js';
 import { buildRunHtmlReport, buildRunReport, buildSweepSummary } from './reporting.js';
 import { getRun, initDb, saveResult, topRuns } from './persistence.js';
 import { runMonteCarlo } from './stats.js';
 import { startApiServer } from './api.js';
+import { renderLiveFrame, runSimulationLive } from './live.js';
+import type { DayState } from './types.js';
 
 function getFlag(args: string[], flag: string, fallback?: string): string | undefined {
   const i = args.indexOf(flag);
   if (i < 0) return fallback;
   return args[i + 1];
+}
+
+function hasFlag(args: string[], flag: string): boolean {
+  return args.includes(flag);
 }
 
 export function cli(argv: string[]): number {
@@ -48,6 +54,59 @@ export function cli(argv: string[]): number {
     const runId = saveResult(db, result, { mode: 'single' });
     console.log(`Run completed: run_id=${runId} avg_resilience=${result.averageResilience.toFixed(4)}`);
     db.close();
+    return 0;
+  }
+
+  if (cmd === 'live') {
+    const scenarioPath = getFlag(args, '--scenario');
+    if (!scenarioPath) throw new Error('live requires --scenario');
+
+    const intervalMs = Number(getFlag(args, '--interval-ms', '250'));
+    const runDays = Number(getFlag(args, '--days', '0'));
+    const clearScreen = !hasFlag(args, '--no-clear');
+
+    const scenario = loadScenario(scenarioPath);
+    const totalDays = runDays > 0 ? Math.min(runDays, scenario.days) : scenario.days;
+
+    const onDay = (day: DayState): void => {
+      if (clearScreen) {
+        process.stdout.write('\x1Bc');
+      }
+      process.stdout.write(
+        `${renderLiveFrame({ scenarioName: scenario.name, totalDays, intervalMs: Math.max(0, intervalMs), day })}\n`
+      );
+    };
+
+    if (intervalMs <= 0) {
+      const timeline = [...streamSimulationDays(scenario, totalDays)];
+      for (const day of timeline) onDay(day);
+      const result = buildSimulationResult(scenario, timeline);
+      const runId = saveResult(db, result, { mode: 'live', intervalMs: 0, runDays: totalDays });
+      console.log(`Live run completed: run_id=${runId} avg_resilience=${result.averageResilience.toFixed(4)}`);
+      db.close();
+      return 0;
+    }
+
+    runSimulationLive(scenario, {
+      intervalMs,
+      maxDays: totalDays,
+      onDay
+    })
+      .then((result) => {
+        const runId = saveResult(db, result, {
+          mode: 'live',
+          intervalMs: Math.max(0, intervalMs),
+          runDays: totalDays
+        });
+        console.log(`Live run completed: run_id=${runId} avg_resilience=${result.averageResilience.toFixed(4)}`);
+        db.close();
+      })
+      .catch((err) => {
+        console.error(`Live run failed: ${String(err?.message ?? err)}`);
+        db.close();
+        process.exitCode = 1;
+      });
+
     return 0;
   }
 
@@ -99,7 +158,7 @@ export function cli(argv: string[]): number {
   }
 
   console.log(
-    'Usage: gardenlab [--db file] run --scenario file | sweep --scenario file | monte-carlo --scenario file [--runs N --confidence 0.95] | report --run-id N --out file [--format md|html] | leaderboard [limit] | api [--host 127.0.0.1 --port 8787]'
+    'Usage: gardenlab [--db file] run --scenario file | live --scenario file [--interval-ms 250 --days N --no-clear] | sweep --scenario file | monte-carlo --scenario file [--runs N --confidence 0.95] | report --run-id N --out file [--format md|html] | leaderboard [limit] | api [--host 127.0.0.1 --port 8787]'
   );
   db.close();
   return 1;
